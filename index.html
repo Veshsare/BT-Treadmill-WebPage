@@ -233,12 +233,7 @@
     }
     if (connecting) return;
     connecting = true;
-    try {
-      if (navigator.bluetooth.getAvailability) {
-        const avail = await navigator.bluetooth.getAvailability();
-        log(`Bluetooth disponibile per il browser: ${avail}`);
-      }
-    } catch (e) { log(`getAvailability fallita: ${describeError(e)}`); }
+    // requestDevice va chiamato subito, senza await prima, per non perdere il "gesto utente"
     try {
       device = await navigator.bluetooth.requestDevice({
         filters: [{ services: [FTMS_SERVICE] }, { namePrefix: 'FS-' }],
@@ -295,6 +290,12 @@
     } finally {
       connecting = false;
     }
+  }
+
+  if (navigator.bluetooth && navigator.bluetooth.getAvailability) {
+    navigator.bluetooth.getAvailability()
+      .then(a => log(`Bluetooth disponibile per il browser: ${a}`))
+      .catch(e => log(`getAvailability fallita: ${describeError(e)}`));
   }
 
   $('connect').onclick = () => {
