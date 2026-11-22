@@ -90,7 +90,7 @@
       <button id="clear" class="small">Pulisci</button>
     </div>
     <div class="row r2" style="margin-top:8px">
-      <button id="testStr" class="small">Test: UUID testuali</button>
+      <button id="testStr" class="small">Test: UUID numerici</button>
       <button id="testAll" class="small">Test: tutti i dispositivi</button>
     </div>
   </details>
@@ -235,10 +235,11 @@
     if (mode === 'all') {
       return { acceptAllDevices: true, optionalServices: [uuid16(FTMS_SERVICE), uuid16(FITSHOW_SVC)] };
     }
-    if (mode === 'strings') {
-      return { filters: [{ namePrefix: 'FS-' }], optionalServices: [uuid16(FTMS_SERVICE), uuid16(FITSHOW_SVC)] };
+    if (mode === 'numeric') {
+      return { filters: [{ services: [FTMS_SERVICE] }, { namePrefix: 'FS-' }], optionalServices: [FTMS_SERVICE, FITSHOW_SVC] };
     }
-    return { filters: [{ services: [FTMS_SERVICE] }, { namePrefix: 'FS-' }], optionalServices: [FTMS_SERVICE, FITSHOW_SVC] };
+    // Default: filtro per nome + UUID testuali (Bluefy rifiuta la variante numerica con codice 2)
+    return { filters: [{ namePrefix: 'FS-' }], optionalServices: [uuid16(FTMS_SERVICE), uuid16(FITSHOW_SVC)] };
   }
 
   async function connect(mode = 'default') {
@@ -247,6 +248,10 @@
       return;
     }
     if (connecting) return;
+    if (device && device.gatt.connected) {
+      log('Già connesso: chiudo la connessione esistente prima di una nuova richiesta.');
+      device.gatt.disconnect();
+    }
     connecting = true;
     // requestDevice va chiamato subito, senza await prima, per non perdere il "gesto utente"
     try {
@@ -299,7 +304,8 @@
       try { if ('wakeLock' in navigator) wakeLock = await navigator.wakeLock.request('screen'); } catch (_) {}
     } catch (e) {
       log(`✗ Connessione fallita: ${describeError(e)}`);
-      setConnected(false);
+      // Se una connessione precedente è ancora attiva, non mostrare "Non connesso"
+      setConnected(!!(device && device.gatt.connected && cp));
     } finally {
       connecting = false;
     }
@@ -321,7 +327,7 @@
   document.querySelectorAll('[data-d]').forEach(b => b.onclick = () => changeSpeed(parseFloat(b.dataset.d)));
   document.querySelectorAll('[data-p]').forEach(b => b.onclick = () => requestSpeed(parseFloat(b.dataset.p)));
 
-  $('testStr').onclick = () => connect('strings');
+  $('testStr').onclick = () => connect('numeric');
   $('testAll').onclick = () => connect('all');
 
   $('copy').onclick = async () => {
