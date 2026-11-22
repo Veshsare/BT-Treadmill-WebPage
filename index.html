@@ -89,6 +89,10 @@
       <button id="copy" class="small">Copia log</button>
       <button id="clear" class="small">Pulisci</button>
     </div>
+    <div class="row r2" style="margin-top:8px">
+      <button id="testStr" class="small">Test: UUID testuali</button>
+      <button id="testAll" class="small">Test: tutti i dispositivi</button>
+    </div>
   </details>
 </main>
 
@@ -226,7 +230,18 @@
 
   // ---- Connessione ----
   let connecting = false;
-  async function connect() {
+  const uuid16 = n => `0000${n.toString(16).padStart(4, '0')}-0000-1000-8000-00805f9b34fb`;
+  function requestOptions(mode) {
+    if (mode === 'all') {
+      return { acceptAllDevices: true, optionalServices: [uuid16(FTMS_SERVICE), uuid16(FITSHOW_SVC)] };
+    }
+    if (mode === 'strings') {
+      return { filters: [{ namePrefix: 'FS-' }], optionalServices: [uuid16(FTMS_SERVICE), uuid16(FITSHOW_SVC)] };
+    }
+    return { filters: [{ services: [FTMS_SERVICE] }, { namePrefix: 'FS-' }], optionalServices: [FTMS_SERVICE, FITSHOW_SVC] };
+  }
+
+  async function connect(mode = 'default') {
     if (!navigator.bluetooth) {
       alert('Questo browser non supporta Web Bluetooth. Su iPhone usa Bluefy; su PC/Android usa Chrome.');
       return;
@@ -235,10 +250,8 @@
     connecting = true;
     // requestDevice va chiamato subito, senza await prima, per non perdere il "gesto utente"
     try {
-      device = await navigator.bluetooth.requestDevice({
-        filters: [{ services: [FTMS_SERVICE] }, { namePrefix: 'FS-' }],
-        optionalServices: [FTMS_SERVICE, FITSHOW_SVC]
-      });
+      log(`requestDevice (modalità: ${mode})`);
+      device = await navigator.bluetooth.requestDevice(requestOptions(mode));
       device.addEventListener('gattserverdisconnected', () => {
         log('Disconnesso.'); cp = null; setConnected(false); stopTimer();
       });
@@ -307,6 +320,9 @@
   $('pause').onclick = pause;
   document.querySelectorAll('[data-d]').forEach(b => b.onclick = () => changeSpeed(parseFloat(b.dataset.d)));
   document.querySelectorAll('[data-p]').forEach(b => b.onclick = () => requestSpeed(parseFloat(b.dataset.p)));
+
+  $('testStr').onclick = () => connect('strings');
+  $('testAll').onclick = () => connect('all');
 
   $('copy').onclick = async () => {
     try { await navigator.clipboard.writeText(logEl.value); }
