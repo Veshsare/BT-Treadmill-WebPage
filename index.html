@@ -211,12 +211,34 @@
   function stop()  { targetSpeed = null; $('target').textContent = ''; write([0x08, 0x01], 'Stop'); stopTimer(); startedAt = null; }
   function pause() { write([0x08, 0x02], 'Pausa'); stopTimer(); }
 
+  // Alcuni browser (es. Bluefy) rifiutano con oggetti non standard: estrai tutto il possibile
+  function describeError(e) {
+    if (e === undefined) return 'undefined (nessun dettaglio)';
+    if (typeof e === 'string') return e;
+    const parts = [];
+    if (e.name) parts.push(`name=${e.name}`);
+    if (e.message) parts.push(`message=${e.message}`);
+    if (e.code !== undefined) parts.push(`code=${e.code}`);
+    try { const j = JSON.stringify(e); if (j && j !== '{}') parts.push(`json=${j}`); } catch (_) {}
+    if (!parts.length) parts.push(`String=${String(e)}`);
+    return parts.join(' | ');
+  }
+
   // ---- Connessione ----
+  let connecting = false;
   async function connect() {
     if (!navigator.bluetooth) {
       alert('Questo browser non supporta Web Bluetooth. Su iPhone usa Bluefy; su PC/Android usa Chrome.');
       return;
     }
+    if (connecting) return;
+    connecting = true;
+    try {
+      if (navigator.bluetooth.getAvailability) {
+        const avail = await navigator.bluetooth.getAvailability();
+        log(`Bluetooth disponibile per il browser: ${avail}`);
+      }
+    } catch (e) { log(`getAvailability fallita: ${describeError(e)}`); }
     try {
       device = await navigator.bluetooth.requestDevice({
         filters: [{ services: [FTMS_SERVICE] }, { namePrefix: 'FS-' }],
@@ -268,8 +290,10 @@
 
       try { if ('wakeLock' in navigator) wakeLock = await navigator.wakeLock.request('screen'); } catch (_) {}
     } catch (e) {
-      log(`✗ Connessione fallita: ${e.message}`);
+      log(`✗ Connessione fallita: ${describeError(e)}`);
       setConnected(false);
+    } finally {
+      connecting = false;
     }
   }
 
