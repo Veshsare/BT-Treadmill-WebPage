@@ -19,7 +19,7 @@
   .speed .val { font-size: 72px; font-weight:700; font-variant-numeric: tabular-nums; line-height:1; }
   .speed .unit { color:var(--muted); font-size:14px; }
   .speed .target { color:var(--muted); font-size:14px; margin-top:6px; min-height:18px; }
-  .stats { display:grid; grid-template-columns: 1fr 1fr; gap:10px; text-align:center; }
+  .stats { display:grid; grid-template-columns: 1fr 1fr 1fr; gap:10px; text-align:center; }
   .stats .v { font-size: 22px; font-weight:600; font-variant-numeric: tabular-nums; }
   .stats .l { font-size: 12px; color: var(--muted); }
   button { font: inherit; border:0; border-radius:12px; background:var(--btn); color:var(--fg); padding:16px 0; font-size:18px; font-weight:600; cursor:pointer; touch-action: manipulation; }
@@ -55,7 +55,8 @@
 
   <div class="card stats">
     <div><div class="v" id="dist">0.00</div><div class="l">km</div></div>
-    <div><div class="v" id="time">0:00</div><div class="l">tempo (da Start)</div></div>
+    <div><div class="v" id="time">0:00</div><div class="l">tempo</div></div>
+    <div><div class="v" id="kcal">0</div><div class="l">kcal</div></div>
   </div>
 
   <div class="row r2">
@@ -181,18 +182,40 @@
       if (flags & 0x0004) {
         const m = dv.getUint16(i, true) | (dv.getUint8(i + 2) << 16);
         $('dist').textContent = (m / 1000).toFixed(2);
+        i += 3;
+      }
+      if (flags & 0x0008) i += 4; // inclinazione + angolo rampa
+      if (flags & 0x0010) i += 4; // dislivello positivo/negativo
+      if (flags & 0x0020) i += 1; // passo istantaneo
+      if (flags & 0x0040) i += 1; // passo medio
+      if (flags & 0x0080) {       // energia: totale (uint16), oraria (uint16), al minuto (uint8)
+        const kcal = dv.getUint16(i, true);
+        if (kcal !== 0xFFFF) $('kcal').textContent = kcal;
+        i += 5;
+      }
+      if (flags & 0x0100) i += 1; // frequenza cardiaca
+      if (flags & 0x0200) i += 1; // MET
+      if (flags & 0x0400) {       // tempo trascorso (secondi), dal tapis roulant
+        machineTime = true;
+        showTime(dv.getUint16(i, true));
+        i += 2;
       }
       if (targetSpeed !== null && Math.abs(currentSpeed - targetSpeed) < 0.05) { targetSpeed = null; $('target').textContent = ''; }
     } catch (err) { log(`Parsing fallito: ${err.message}`); }
   }
 
   // ---- Timer locale ----
+  let machineTime = false; // true se il tapis roulant invia il tempo trascorso
+  function showTime(s) {
+    const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
+    $('time').textContent = h ? `${h}:${String(m).padStart(2,'0')}:${String(sec).padStart(2,'0')}` : `${m}:${String(sec).padStart(2,'0')}`;
+  }
   function startTimer() {
-    if (timerId) return;
+    if (timerId || machineTime) return;
     startedAt = startedAt || Date.now();
     timerId = setInterval(() => {
-      const s = Math.floor((Date.now() - startedAt) / 1000);
-      $('time').textContent = `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+      if (machineTime) { stopTimer(); return; }
+      showTime(Math.floor((Date.now() - startedAt) / 1000));
     }, 1000);
   }
   function stopTimer() { clearInterval(timerId); timerId = null; }
